@@ -12,3 +12,9 @@ python-dotenv>=1.0.0
 fastapi
 uvicorn[standard]>=0.27.0
 langchain-google-genai
+pandas>=2.0.0
+
+# Database Connectors
+pymssql>=2.2.0  # For SQL Server
+# pymysql>=1.1.0  # Uncomment if using MySQL
+# psycopg2-binary>=2.9.0  # Uncomment if using PostgreSQL
