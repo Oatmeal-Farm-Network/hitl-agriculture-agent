@@ -5,13 +5,22 @@ from langgraph.types import Command
 from fastapi.middleware.cors import CORSMiddleware
 from main import graph
 from pydantic import BaseModel
+import os
 
 app = FastAPI()
 
+# Configure CORS - allow frontend URL from environment or default to localhost
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+allowed_origins = [frontend_url]
+
+# In production, you might want to allow all origins or specific Cloud Run URLs
+# For Cloud Run, you can also use "*" to allow all origins
+if os.getenv("ALLOW_ALL_ORIGINS", "false").lower() == "true":
+    allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js default port
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

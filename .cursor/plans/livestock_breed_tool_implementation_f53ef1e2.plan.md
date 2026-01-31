@@ -41,8 +41,6 @@ Enhance the existing agricultural assistant to support livestock breed queries b
 
 ## Architecture
 
-The implementation follows this flow:
-
 ```mermaid
 flowchart TD
     A[User Query] --> B{Keyword Check}
