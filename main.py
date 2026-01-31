@@ -86,6 +86,9 @@ def initialize_llm():
 class AdvisorState(TypedDict, total=False):
     history: List[str]
     advice: Optional[str]
+    # Add pending question/options to state to ensure consistency across interrupts
+    pending_question: Optional[str]
+    pending_options: Optional[List[str]]
 
 class UI_Decision(BaseModel):
     is_ready: bool = Field(description="True if you have enough information to provide a useful diagnosis. Assess based on information quality, not question count.")
@@ -97,7 +100,11 @@ class UI_Decision(BaseModel):
 # Initialize LLM with automatic authentication detection
 llm = initialize_llm()
 
-def advisor_node(state: AdvisorState):
+def model_node(state: AdvisorState):
+    """
+    Generates the next question or final advice.
+    Returns update to state with either advice (completing flow) or pending_question (requiring input).
+    """
     structured_llm = llm.with_structured_output(UI_Decision)
     
     # Ensure history exists and is a list - read from state values
@@ -176,21 +183,12 @@ Note: After 7+ questions, strongly consider providing diagnosis even if not perf
                 # Last resort: at least make them more descriptive
                 options = ["Option 1 (describe)", "Option 2 (describe)", "Option 3 (describe)", "Other/Not sure"]
         
-        ui_schema = {
-            "type": "quiz",
-            "question": res.question,
-            "options": options
+        # Return pending question/options to state instead of interrupting directly
+        return {
+            "pending_question": res.question,
+            "pending_options": options,
+            "advice": None # Clear any previous advice if exists
         }
-        # The interrupt pauses the thread here
-        user_response = interrupt(ui_schema)
-        
-        # Update history with both question and answer
-        updated_history = current_history + [f"AI: {res.question}", f"User: {user_response}"]
-        
-        return Command(
-            update={"history": updated_history},
-            goto="advisor_node"
-        )
     
     # Ensure advice is provided
     advice = res.advice
@@ -200,11 +198,55 @@ Note: After 7+ questions, strongly consider providing diagnosis even if not perf
     
     return {"advice": advice}
 
+def human_node(state: AdvisorState):
+    """
+    Handles user interaction.
+    Reads pending question from state, interrupts for user input, and updates history.
+    """
+    question = state.get("pending_question")
+    options = state.get("pending_options")
+
+    if not question:
+        # Should not happen if logic is correct, but safe fallback
+        return Command(goto="model_node")
+
+    ui_schema = {
+        "type": "quiz",
+        "question": question,
+        "options": options
+    }
+
+    # The interrupt pauses the thread here
+    user_response = interrupt(ui_schema)
+
+    current_history = state.get("history") or []
+    updated_history = current_history + [f"AI: {question}", f"User: {user_response}"]
+
+    return Command(
+        update={
+            "history": updated_history,
+            "pending_question": None, # Clear pending
+            "pending_options": None
+        },
+        goto="model_node"
+    )
+
+def should_continue(state: AdvisorState):
+    if state.get("advice"):
+        return END
+    return "human_node"
+
 # Compile outside of any functions so it persists when imported
 builder = StateGraph(AdvisorState)
-builder.add_node("advisor_node", advisor_node)
-builder.add_edge(START, "advisor_node")
-builder.add_edge("advisor_node", END)
+builder.add_node("model_node", model_node)
+builder.add_node("human_node", human_node)
+
+builder.add_edge(START, "model_node")
+builder.add_conditional_edges("model_node", should_continue)
+# human_node always goes back to model_node (handled by Command logic, but good to have edge definition if not using Command goto)
+# But since we use Command(goto="model_node"), we don't strictly need a static edge,
+# however, for visualization and correctness it's good practice.
+builder.add_edge("human_node", "model_node")
 
 memory = MemorySaver()
 graph = builder.compile(checkpointer=memory)

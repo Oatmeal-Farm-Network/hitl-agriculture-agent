@@ -3,7 +3,6 @@ from fastapi import FastAPI, Body
 from main import graph # Your existing graph
 from langgraph.types import Command
 from fastapi.middleware.cors import CORSMiddleware
-from main import graph
 from pydantic import BaseModel
 
 app = FastAPI()
