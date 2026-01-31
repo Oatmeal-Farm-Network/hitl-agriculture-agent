@@ -55,27 +55,27 @@ jobs:
 
       - name: Build Backend Docker image
         run: |
-          # Convert service name to lowercase for Docker image (Docker requires lowercase)
-          BACKEND_IMAGE_NAME=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          # Convert service name to lowercase (Docker and Cloud Run both require lowercase)
+          BACKEND_SERVICE_LOWER=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
           docker build -f Dockerfile.backend \
-            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_IMAGE_NAME:$GITHUB_SHA \
-            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_IMAGE_NAME:latest \
+            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_SERVICE_LOWER:$GITHUB_SHA \
+            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_SERVICE_LOWER:latest \
             .
 
       - name: Push Backend Docker image
         run: |
-          # Convert service name to lowercase for Docker image
-          BACKEND_IMAGE_NAME=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
-          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_IMAGE_NAME:$GITHUB_SHA
-          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_IMAGE_NAME:latest
+          # Convert service name to lowercase
+          BACKEND_SERVICE_LOWER=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_SERVICE_LOWER:$GITHUB_SHA
+          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_SERVICE_LOWER:latest
 
       - name: Deploy Backend to Cloud Run
         id: deploy-backend
         run: |
-          # Convert service name to lowercase for Docker image (Cloud Run service name stays uppercase)
-          BACKEND_IMAGE_NAME=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
-          gcloud run deploy $BACKEND_SERVICE \
-            --image $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_IMAGE_NAME:$GITHUB_SHA \
+          # Convert service name to lowercase for both Docker image and Cloud Run service (both require lowercase)
+          BACKEND_SERVICE_LOWER=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          gcloud run deploy $BACKEND_SERVICE_LOWER \
+            --image $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$BACKEND_SERVICE_LOWER:$GITHUB_SHA \
             --region $REGION \
             --platform managed \
             --allow-unauthenticated \
@@ -87,7 +87,7 @@ jobs:
             --set-env-vars "GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$REGION,ALLOW_ALL_ORIGINS=true"
           
           # Get the backend service URL
-          BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE --region $REGION --format 'value(status.url)')
+          BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE_LOWER --region $REGION --format 'value(status.url)')
           echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "Backend deployed at: $BACKEND_URL"
 
@@ -132,7 +132,9 @@ jobs:
       - name: Get Backend URL
         id: get-backend-url
         run: |
-          BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE --region $REGION --format 'value(status.url)')
+          # Convert service name to lowercase (Cloud Run requires lowercase)
+          BACKEND_SERVICE_LOWER=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          BACKEND_URL=$(gcloud run services describe $BACKEND_SERVICE_LOWER --region $REGION --format 'value(status.url)')
           echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_OUTPUT
           echo "Backend URL: $BACKEND_URL"
 
@@ -140,29 +142,29 @@ jobs:
         env:
           BACKEND_URL: ${{ steps.get-backend-url.outputs.BACKEND_URL }}
         run: |
-          # Convert service name to lowercase for Docker image (Docker requires lowercase)
-          FRONTEND_IMAGE_NAME=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          # Convert service name to lowercase (Docker and Cloud Run both require lowercase)
+          FRONTEND_SERVICE_LOWER=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
           docker build -f frontend/Dockerfile \
             --build-arg BACKEND_URL=$BACKEND_URL \
-            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_IMAGE_NAME:$GITHUB_SHA \
-            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_IMAGE_NAME:latest \
+            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_SERVICE_LOWER:$GITHUB_SHA \
+            -t $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_SERVICE_LOWER:latest \
             ./frontend
 
       - name: Push Frontend Docker image
         run: |
-          # Convert service name to lowercase for Docker image
-          FRONTEND_IMAGE_NAME=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
-          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_IMAGE_NAME:$GITHUB_SHA
-          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_IMAGE_NAME:latest
+          # Convert service name to lowercase
+          FRONTEND_SERVICE_LOWER=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_SERVICE_LOWER:$GITHUB_SHA
+          docker push $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_SERVICE_LOWER:latest
 
       - name: Deploy Frontend to Cloud Run
         env:
           BACKEND_URL: ${{ steps.get-backend-url.outputs.BACKEND_URL }}
         run: |
-          # Convert service name to lowercase for Docker image (Cloud Run service name stays uppercase)
-          FRONTEND_IMAGE_NAME=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
-          gcloud run deploy $FRONTEND_SERVICE \
-            --image $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_IMAGE_NAME:$GITHUB_SHA \
+          # Convert service name to lowercase (Cloud Run requires lowercase)
+          FRONTEND_SERVICE_LOWER=$(echo "$FRONTEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          gcloud run deploy $FRONTEND_SERVICE_LOWER \
+            --image $GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$FRONTEND_SERVICE_LOWER:$GITHUB_SHA \
             --region $REGION \
             --platform managed \
             --allow-unauthenticated \
@@ -174,10 +176,11 @@ jobs:
             --set-env-vars "BACKEND_URL=$BACKEND_URL"
           
           # Get the frontend service URL
-          FRONTEND_URL=$(gcloud run services describe $FRONTEND_SERVICE --region $REGION --format 'value(status.url)')
+          FRONTEND_URL=$(gcloud run services describe $FRONTEND_SERVICE_LOWER --region $REGION --format 'value(status.url)')
           echo "Frontend deployed at: $FRONTEND_URL"
           
           # Optionally update backend with frontend URL for more restrictive CORS
-          # gcloud run services update $BACKEND_SERVICE \
+          # BACKEND_SERVICE_LOWER=$(echo "$BACKEND_SERVICE" | tr '[:upper:]' '[:lower:]')
+          # gcloud run services update $BACKEND_SERVICE_LOWER \
           #   --region $REGION \
           #   --update-env-vars "FRONTEND_URL=$FRONTEND_URL,ALLOW_ALL_ORIGINS=false"
