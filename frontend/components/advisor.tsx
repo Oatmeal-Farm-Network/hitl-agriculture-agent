@@ -20,7 +20,7 @@ const THINKING_MESSAGES = [
   '🐄 Checking livestock knowledge base...',  
   '📚 Retrieving breed database...',        
   '🧠 Processing recommendations...',
-  '✨ Preparing your advice...',
+  '✨ Preparing your advice..',
 ];
 
 export default function Advisor() {
