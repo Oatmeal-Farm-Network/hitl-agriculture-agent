@@ -1,0 +1,17 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	assessment_node(assessment_node)
+	advisory_node(advisory_node)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> assessment_node;
+	assessment_node -.-> advisory_node;
+	advisory_node --> __end__;
+	assessment_node -.-> assessment_node;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
