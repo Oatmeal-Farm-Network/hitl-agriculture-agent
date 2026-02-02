@@ -1,6 +1,6 @@
 'use client';
 // --- components/advisor.tsx ---
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,9 +12,20 @@ interface Quiz {
   options: string[];
 }
 
+// Animated thinking messages - defined outside component to prevent re-creation
+const THINKING_MESSAGES = [
+  '🔍 Analyzing your question...',
+  '📋 Assessment in process...',
+  '🌾 Consulting crop experts...',
+  '🐄 Checking livestock knowledge base...',  
+  '📚 Retrieving breed database...',        
+  '🧠 Processing recommendations...',
+  '✨ Preparing your advice...',
+];
+
 export default function Advisor() {
-  // Generate a unique thread_id for this conversation session
-  const threadId = useMemo(() => `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, []);
+  // Generate thread_id on client side only (after mount) to avoid hydration mismatch
+  const [threadId, setThreadId] = useState('');
   
   const [input, setInput] = useState('');
   const [chat, setChat] = useState<Message[]>([
@@ -24,8 +35,40 @@ export default function Advisor() {
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [customAnswer, setCustomAnswer] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const [thinkingMessage, setThinkingMessage] = useState('');
+
+  // Generate unique thread_id on client side after component mounts
+  useEffect(() => {
+    if (!threadId) {
+      setThreadId(`thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+    }
+  }, [threadId]);
+
+  // Cycle through thinking messages
+  useEffect(() => {
+    if (!isThinking) {
+      setThinkingMessage('');
+      return;
+    }
+
+    let messageIndex = 0;
+    setThinkingMessage(THINKING_MESSAGES[0]);
+
+    const interval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % THINKING_MESSAGES.length;
+      setThinkingMessage(THINKING_MESSAGES[messageIndex]);
+    }, 1500); // Change message every 1.5 seconds
+
+    return () => clearInterval(interval);
+  }, [isThinking]); // Only depend on isThinking
 
   async function sendMessage(val: string, options?: { showUserBubble?: boolean }) {
+    // Wait for threadId to be generated
+    if (!threadId) {
+      console.log('Waiting for thread ID to be generated...');
+      return;
+    }
+
     const showUserBubble = options?.showUserBubble ?? true;
 
     // Add user message to chat immediately (for free-text input)
@@ -57,9 +100,52 @@ export default function Advisor() {
       if (data.status === 'requires_input') {
         // Show quiz form (question is included in the quiz form UI)
         setQuiz(data.ui); // This triggers the quiz form to show up
-      } else {
+      } else if (data.status === 'complete') {
+        // Format diagnosis and recommendations
+        let responseContent = '';
+        
+        if (data.diagnosis) {
+          // Clean up any remaining markdown artifacts
+          responseContent = data.diagnosis
+            .replace(/\*\*/g, '')  // Remove bold markdown
+            .replace(/##\s+/g, '')  // Remove headers
+            .replace(/\*/g, '')     // Remove asterisks
+            .trim();
+        }
+        
+        // Only add recommendations section if they exist and aren't already in diagnosis
+        if (data.recommendations && data.recommendations.length > 0) {
+          // Check if recommendations are already embedded in the diagnosis
+          const hasEmbeddedRecs = data.recommendations.some((rec: string) => 
+            responseContent.toLowerCase().includes(rec.toLowerCase().substring(0, 30))
+          );
+          
+          if (!hasEmbeddedRecs) {
+            responseContent += '\n\n📌 Quick Tips:\n';
+            data.recommendations.slice(0, 3).forEach((rec: string, idx: number) => {
+              const cleanRec = rec.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+              responseContent += `\n• ${cleanRec}`;
+            });
+          }
+        }
+        
+        if (!responseContent) {
+          responseContent = 'Assessment complete. How else can I help you?';
+        }
+        
         // Add final advice to chat
-        const aiMessage: Message = { role: 'assistant', content: data.advice || 'Thank you for using the agricultural assistant!' };
+        const aiMessage: Message = { role: 'assistant', content: responseContent };
+        setChat(prev => [...prev, aiMessage]);
+      } else if (data.status === 'error') {
+        // Handle error
+        const errorMessage: Message = { 
+          role: 'assistant', 
+          content: `Sorry, an error occurred: ${data.message || 'Please try again.'}` 
+        };
+        setChat(prev => [...prev, errorMessage]);
+      } else {
+        // Fallback for unexpected status
+        const aiMessage: Message = { role: 'assistant', content: 'Thank you for using the agricultural assistant!' };
         setChat(prev => [...prev, aiMessage]);
       }
     } finally {
@@ -113,32 +199,36 @@ export default function Advisor() {
           </div>
         ))}
 
-        {/* Thinking Indicator */}
+        {/* Thinking Indicator with Animated Messages */}
         {isThinking && (
           <div className="flex justify-start">
-            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
-              <div className="flex items-center space-x-2">
-                <svg
-                  className="animate-spin h-5 w-5 text-gray-400"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <span className="text-sm text-gray-400">Thinking...</span>
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-750 text-gray-100 shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <svg
+                    className="animate-spin h-5 w-5 text-blue-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                </div>
+                <span className="text-sm font-medium text-gray-200 animate-pulse">
+                  {thinkingMessage || 'Processing...'}
+                </span>
               </div>
             </div>
           </div>
