@@ -18,3 +18,6 @@ google-cloud-firestore>=2.0.0
 
 #sql
 pymssql
+
+# Weather API
+requests>=2.31.0
